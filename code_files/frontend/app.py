@@ -110,7 +110,12 @@ def parse_metrics(logs):
 
     m["final_accuracy"]     = find(r"Final Test Accuracy:\s*([\d.]+)%")
     m["best_arch_idx"]      = find(r"Best Architecture Index:\s*(\d+)", int)
-    m["proxy_accuracy"]     = find(r"Proxy Accuracy\s*:\s*([\d.]+)")
+    best_block = re.search(
+        r"Best Architecture Index:.*?Proxy Accuracy:\s*([\d.]+)",
+        text,
+        re.DOTALL
+    )
+    m["proxy_accuracy"] = float(best_block.group(1)) if best_block else None    
     m["tgfnas_score"]       = find(r"TGF-NAS Score:\s*([-\d.]+)")
     m["alpha"]              = find(r"α=([\d.nan]+)")
     m["beta"]               = find(r"β=([\d.nan]+)")
@@ -421,8 +426,8 @@ st.markdown(
     f'<span class="status-badge {badge}">{emoji} {status.upper()}</span>',
     unsafe_allow_html=True,
 )
-if st.session_state.running:
-    st.progress(0.5)
+# if st.session_state.running:
+#     st.progress(0.5)
 st.markdown("---")
 
 
@@ -455,13 +460,13 @@ with col_left:
             v = f"{m['tgfnas_score']:.4f}" if m.get("tgfnas_score") is not None else "…"
             st.markdown(mcard("TGF-NAS Score", v), unsafe_allow_html=True)
 
-    # ── Training curve ────────────────────────────────────────────────────────
-    if m.get("epoch_history"):
-        st.markdown('<div class="section-header">📈 Training Progress</div>', unsafe_allow_html=True)
-        df_ep = (pd.DataFrame(m["epoch_history"])
-                   .set_index("epoch")[["train_acc", "test_acc"]])
-        df_ep.columns = ["Train %", "Test %"]
-        st.line_chart(df_ep)
+    # # ── Training curve ────────────────────────────────────────────────────────
+    # if m.get("epoch_history"):
+    #     st.markdown('<div class="section-header">📈 Training Progress</div>', unsafe_allow_html=True)
+    #     df_ep = (pd.DataFrame(m["epoch_history"])
+    #                .set_index("epoch")[["train_acc", "test_acc"]])
+    #     df_ep.columns = ["Train %", "Test %"]
+    #     st.line_chart(df_ep)
 
     # ── Pruning ───────────────────────────────────────────────────────────────
     if m.get("baseline_accuracy") is not None:
@@ -494,19 +499,6 @@ with col_left:
         ]
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    # ── Heatmap ───────────────────────────────────────────────────────────────
-    heatmap_png = make_heatmap_from_parsed(m, sparsity)
-    if heatmap_png:
-        st.markdown('<div class="section-header">🌡️ Stage Comparison Heatmap</div>',
-                    unsafe_allow_html=True)
-        st.image(heatmap_png, use_container_width=True)
-        st.download_button(
-            label="⬇️ Download Heatmap (PNG, 300 dpi)",
-            data=heatmap_png,
-            file_name="HAR_LAHUP_HEATMAP.png",
-            mime="image/png",
-            use_container_width=True,
-        )
 
     # ── Model downloads ───────────────────────────────────────────────────────
     if status == "done" and st.session_state.model_paths:
@@ -561,6 +553,20 @@ with col_right:
             data="\n".join(logs),
             file_name="har_pipeline_log.txt",
             mime="text/plain",
+            use_container_width=True,
+        )
+
+     # ── Heatmap ───────────────────────────────────────────────────────────────
+    heatmap_png = make_heatmap_from_parsed(m, sparsity)
+    if heatmap_png:
+        st.markdown('<div class="section-header">🌡️ Stage Comparison Heatmap</div>',
+                    unsafe_allow_html=True)
+        st.image(heatmap_png, use_container_width=True)
+        st.download_button(
+            label="⬇️ Download Heatmap (PNG, 300 dpi)",
+            data=heatmap_png,
+            file_name="HAR_LAHUP_HEATMAP.png",
+            mime="image/png",
             use_container_width=True,
         )
 

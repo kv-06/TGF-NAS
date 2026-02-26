@@ -511,6 +511,7 @@ def evaluate_model_on_subset(model, test_csv_path, sequence_length,
 
 
 def train_probe_epoch(model, optimizer, train_csv_path, test_csv_path,
+                      model_index=None,
                       sequence_length=1, num_epochs=15, batches_per_epoch=70):
     epoch_accuracies = []
     try:
@@ -531,7 +532,10 @@ def train_probe_epoch(model, optimizer, train_csv_path, test_csv_path,
         model.train()
 
         for epoch in range(num_epochs):
-            print(f"EPOCH {epoch + 1}/{num_epochs}")
+            if model_index is not None:
+                print(f"[Model {model_index}] EPOCH {epoch + 1}/{num_epochs}")
+            else:
+                print(f"EPOCH {epoch + 1}/{num_epochs}")            
             epoch_loss = 0
             batch_count = 0
             for batch_idx, (data, target) in enumerate(train_loader):
@@ -867,7 +871,7 @@ def TGF_NAS(
 
     for i, model in enumerate(sampled_models):
         print(f"\n{'='*60}")
-        print(f"Evaluating Model {i + 1}/{len(sampled_models)}")
+        print(f"Evaluating Model {i} (Index {i})")
         print(f"{'='*60}")
 
         G_magnitude_history = {}
@@ -881,7 +885,11 @@ def TGF_NAS(
 
         start_time = time.time()
         proxy_acc, epoch_accs = train_probe_epoch(
-            model, optimizer_inst, train_path, test_path,
+            model,
+            optimizer_inst,
+            train_path,
+            test_path,
+            model_index=i,
             sequence_length=sequence_length,
             num_epochs=num_probe_epochs,
             batches_per_epoch=batches_per_epoch,
