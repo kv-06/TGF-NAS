@@ -64,8 +64,15 @@ def run_pipeline_job(job_id, train_path, test_path, input_size, output_size,
             dataset_fraction=dataset_fraction, save_dir=save_dir,
         )
         jobs[job_id]["status"]      = "done"
-        jobs[job_id]["result"]      = {k: v for k, v in result.items() if k != "model_paths"}
         jobs[job_id]["model_paths"] = result.get("model_paths", {})
+        jobs[job_id]["result"] = {
+            "accuracy":                result.get("accuracy"),
+            "sparsity":                result.get("sparsity"),
+            "quantization":            result.get("quantization"),
+            "best_architecture_index": result.get("best_architecture_index"),
+            "stage_metrics":           result.get("stage_metrics"),
+            "architecture_table":      result.get("architecture_table"),  #remove
+        }
     except Exception:
         import traceback
         err = traceback.format_exc()

@@ -232,7 +232,7 @@ def make_heatmap_from_parsed(m: dict, sparsity_param: float) -> bytes | None:
 
     # Base (full trained)
     if m.get("final_accuracy") is not None:
-        sm["Base"] = {
+        sm["TGF-NAS"] = {
             "accuracy": m["final_accuracy"],
             "size":     m.get("size_before") or 0.0,
             "speed":    0.0,
@@ -290,10 +290,6 @@ with st.sidebar:
     used_pct = f"{dataset_fraction*100:.0f}%"
     st.caption(f"Using **{used_pct}** of train & test data")
 
-    st.subheader("🔢 Model Config")
-    input_size  = st.number_input("Input Size  (0 = auto)", min_value=0, value=0, step=1)
-    output_size = st.number_input("Output Size (0 = auto)", min_value=0, value=0, step=1)
-
     st.subheader("🔍 NAS")
     num_architectures = st.slider("Architectures to sample", 5, 100, 20, 5)
 
@@ -338,8 +334,8 @@ if run_btn:
                     "test_file":  (test_file.name,  test_file.getvalue(),  "text/csv"),
                 },
                 data={
-                    "input_size":        str(int(input_size)),
-                    "output_size":       str(int(output_size)),
+                    "input_size":        "0",
+                    "output_size":       "0",
                     "use_embedding":     "false",
                     "num_architectures": str(num_architectures),
                     "sparsity":          str(sparsity),
@@ -467,6 +463,34 @@ with col_left:
     #                .set_index("epoch")[["train_acc", "test_acc"]])
     #     df_ep.columns = ["Train %", "Test %"]
     #     st.line_chart(df_ep)
+
+    #remove
+
+    #remove
+    if st.session_state.result is not None:  #remove
+        arch_table = st.session_state.result.get("architecture_table", [])  #remove
+        if arch_table:  #remove
+            st.markdown('<div class="section-header">📊 Architecture Comparison (Full Training)</div>', unsafe_allow_html=True)  #remove
+            _df = pd.DataFrame(arch_table)  #remove
+            _col_rename = {  #remove
+                "arch_index":    "Arch #",  #remove
+                "tgfnas_score":  "TGF-NAS Score",  #remove
+                "full_accuracy": "Accuracy (%)",  #remove
+                "model_size_mb": "Size (MB)",  #remove
+                "inf_speed_ms":  "Speed (ms)",  #remove
+                "num_params":    "Params",  #remove
+            }  #remove
+            _df_show = _df[[col for col in _col_rename if col in _df.columns]].rename(columns=_col_rename)  #remove
+            _df_show = _df_show.sort_values("TGF-NAS Score", ascending=False).reset_index(drop=True)  #remove
+            _best_idx = st.session_state.result.get("best_architecture_index")  #remove
+            _arch_nums = _df_show["Arch #"].tolist()  #remove
+            def _highlight_best(row):  #remove
+                if _arch_nums[row.name] == _best_idx:  #remove
+                    return ["background-color:#1a3a5f; color:#4fc3f7; font-weight:bold;"] * len(row)  #remove
+                return [""] * len(row)  #remove
+            st.dataframe(_df_show.style.apply(_highlight_best, axis=1), use_container_width=True, hide_index=True)  #remove
+            st.caption("🔵 Highlighted row = architecture selected by TGF-NAS")  #remove
+    #yep
 
     # ── Pruning ───────────────────────────────────────────────────────────────
     if m.get("baseline_accuracy") is not None:

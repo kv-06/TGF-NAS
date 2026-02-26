@@ -760,9 +760,9 @@ def TGF_NAS(
     sparsity: float,
     quant_types: list,
     sequence_length: int = 1,
-    num_probe_epochs: int = 5,
+    num_probe_epochs: int = 15,
     batches_per_epoch: int = 70,
-    full_train_epochs: int = 20,
+    full_train_epochs: int = 30,
     tgf_percentile: float = 70.0,
 ) -> dict:
     """
@@ -969,6 +969,33 @@ def TGF_NAS(
         num_epochs=full_train_epochs,
     )
 
+    #remove
+    print("\n[Arch Table] Fully training all architectures for comparison table...") #remove
+    _arch_test_loader = _build_test_loader(test_path) #remove
+    architecture_table = [] #remove
+    for i in range(len(evaluation_history)): #remove
+        hist = evaluation_history[i] #remove
+        print(f"  [Arch Table] Training arch {i}/{len(evaluation_history)-1}...") #remove
+        _arch_model = copy.deepcopy(hist["model"]) #remove
+        _arch_model, _arch_acc = full_training( #remove
+            _arch_model, train_path, test_path, #remove
+            sequence_length=sequence_length, #remove
+            num_epochs=full_train_epochs, #remove
+        ) #remove
+        _arch_size  = model_size_mb(_arch_model) #remove
+        _arch_speed = _inference_speed(_arch_model, _arch_test_loader) #remove
+        architecture_table.append({ #remove
+            "arch_index":     i, #remove
+            "is_best":        (i == best_idx), #remove
+            "tgfnas_score":   round(float(tgfnas_scores[i]), 4), #remove
+            "full_accuracy":  round(_arch_acc, 2), #remove
+            "model_size_mb":  round(_arch_size, 3), #remove
+            "inf_speed_ms":   round(_arch_speed, 3), #remove
+            "num_params":     hist["num_params"], #remove
+        }) #remove
+        print(f"    Arch {i}: acc={_arch_acc:.2f}%  size={_arch_size:.3f}MB  speed={_arch_speed:.3f}ms {'← BEST (TGF-NAS selected)' if i == best_idx else ''}") #remove
+    #yep
+
     return {
         "accuracy": final_acc,
         "sparsity": sparsity,
@@ -977,6 +1004,7 @@ def TGF_NAS(
         "evaluation_history": evaluation_history,
         "tgfnas_scores": tgfnas_scores,
         "best_architecture_index": best_idx,
+        "architecture_table": architecture_table, #remove
     }
 
 
@@ -1779,6 +1807,7 @@ def run_pipeline(
             }
 
         return {
+            **result,  #remove
             "accuracy":     trained_acc,
             "sparsity":     sparsity,
             "quantization": quant_types,
@@ -1800,7 +1829,7 @@ if __name__ == "__main__":
         input_size=561,
         output_size=6,
         use_embedding=False,
-        num_architectures=20,
+        num_architectures=2,
         sparsity=0.3,
         quant_types=["FP16", "INT8"],
     )
