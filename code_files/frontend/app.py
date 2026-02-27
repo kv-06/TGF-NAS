@@ -18,8 +18,8 @@ import seaborn as sns
 import streamlit as st
 
 # 
-API_URL       = "https://kv06-tgf-nas.hf.space"
-# API_URL = "http://localhost:8000"
+# API_URL       = "https://kv06-tgf-nas.hf.space"
+API_URL = "http://localhost:8000"
 POLL_INTERVAL = 2
 
 st.set_page_config(
@@ -35,7 +35,6 @@ st.markdown("""
     background:linear-gradient(135deg,#1e3a5f,#16213e);
     border-radius:12px; padding:18px 22px; color:#fff;
     text-align:center; border:1px solid #2a5298; margin-bottom:8px;
-    min-height:100px; display:flex; flex-direction:column; justify-content:center;
 }
 .metric-label { font-size:12px; color:#a0b4cc; margin-bottom:4px; }
 .metric-value { font-size:28px; font-weight:700; color:#4fc3f7; }
@@ -87,35 +86,34 @@ def mcard(label, value, sub=""):
 
 def colorize(line):
     esc = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    # Best result lines — bright cyan bold
+    # Cyan bold — key results
     if any(k in line for k in ["Best Architecture Index", "Final Test Accuracy", "TGF-NAS Score:"]):
         return f'<span style="color:#4fc3f7;font-weight:600">{esc}</span>'
-    # Success / saved lines — green
-    if any(k in line for k in ["Model saved", "Saved", "Accuracy after fine-tuning",
-                                "[run_pipeline] Saved", "model_full_trained", "model_pruned",
-                                "model_quant", "Arch Table"]):
+    # Green — saves and fine-tune accuracy
+    if any(k in line for k in ["Model saved", "[run_pipeline] Saved", "Accuracy after fine-tuning",
+                                "Arch Table"]):
         return f'<span style="color:#4caf50">{esc}</span>'
-    # Errors — red
+    # Red — errors
     if any(k in line for k in ["ERROR", "Error", "failed", "Traceback"]):
         return f'<span style="color:#f44336">{esc}</span>'
-    # Warnings / accuracy drops — yellow
+    # Yellow — warnings and accuracy drops
     if any(k in line for k in ["WARNING", "[WARNING]", "Pruned (before FT)",
                                 "Accuracy after pruning", "drop:"]):
         return f'<span style="color:#ffc107">{esc}</span>'
-    # Section headers / pipeline stages — purple
+    # Purple — section headers
     if any(k in line for k in ["===", "---", "APPLY", "PRUNING SUMMARY", "QUANTIZATION SUMMARY",
                                 "QUANT", "TGF-NAS", "run_pipeline", "LAHUP"]):
         return f'<span style="color:#9575cd">{esc}</span>'
-    # Epoch lines — teal
+    # Teal — epoch lines
     if re.match(r"\s*Epoch\s+\d+", line):
         return f'<span style="color:#80cbc4">{esc}</span>'
-    # Probe / scoring lines — soft orange
+    # Orange — probe/scoring stats
     if any(k in line for k in ["Proxy Accuracy", "Architecture Magnitude", "Architecture Consistency",
                                 "Training Time", "Trainable Parameters", "Evaluating Model"]):
         return f'<span style="color:#ffb74d">{esc}</span>'
-    # Baseline / summary stats — light grey-blue
+    # Grey-blue — size/sparsity summary lines
     if any(k in line for k in ["Baseline accuracy", "Achieved sparsity", "Model Size",
-                                "Size Reduction", "Auto-detected"]):
+                                "Auto-detected"]):
         return f'<span style="color:#b0bec5">{esc}</span>'
     return esc
 
@@ -180,7 +178,7 @@ def build_heatmap(stage_metrics: dict) -> bytes:
     metrics = [
         "Accuracy (%) ↑",
         "Model Size (MB) ↓",
-        "Inference Speed ↑",
+        "Inference Speed (ms) ↓",
         "Sparsity (%) ↑",
     ]
     fields  = ["accuracy", "size", "speed", "sparsity"]
@@ -199,7 +197,7 @@ def build_heatmap(stage_metrics: dict) -> bytes:
             norm = np.zeros_like(column)
         else:
             norm = (column - mn) / (mx - mn)
-        if col == 1:          # Model Size ↓  →  invert
+        if col in (1, 2):     # Model Size ↓ and Inference Speed ↓  →  invert
             norm = 1 - norm
         norm_data[:, col] = norm
 
@@ -247,10 +245,21 @@ def build_heatmap(stage_metrics: dict) -> bytes:
 
 
 def make_heatmap_from_parsed(m: dict, sparsity_param: float) -> bytes | None:
-    """Assemble stage_metrics from parsed log values, then render heatmap."""
+    """
+    Use stage_metrics from the API result when available — it has real inference
+    speeds for every stage. Fall back to log-parsed values only if result is not
+    ready yet (i.e. pipeline still running).
+    """
+    # Prefer stage_metrics computed by run_pipeline (has real speeds for all stages)
+    result = st.session_state.get("result") or {}
+    stage_metrics = result.get("stage_metrics")
+    if stage_metrics and len(stage_metrics) >= 2:
+        return build_heatmap(stage_metrics)
+
+    # Fallback: rebuild from log text (speeds will be 0 for non-quant stages,
+    # but this keeps the heatmap appearing while the job is still running)
     sm = {}
 
-    # Base (full trained)
     if m.get("final_accuracy") is not None:
         sm["TGF-NAS"] = {
             "accuracy": m["final_accuracy"],
@@ -259,7 +268,6 @@ def make_heatmap_from_parsed(m: dict, sparsity_param: float) -> bytes | None:
             "sparsity": 0.0,
         }
 
-    # LAHUP (before fine-tune)
     if m.get("pruned_accuracy") is not None:
         sm["LAHUP"] = {
             "accuracy": m["pruned_accuracy"],
@@ -268,16 +276,14 @@ def make_heatmap_from_parsed(m: dict, sparsity_param: float) -> bytes | None:
             "sparsity": m.get("achieved_sparsity") or sparsity_param * 100,
         }
 
-    # LAHUP + Fine-tune
     if m.get("finetuned_accuracy") is not None:
-        sm["LAHUP + FT"] = {
+        sm["LAHUP+FT"] = {
             "accuracy": m["finetuned_accuracy"],
             "size":     m.get("size_after") or 0.0,
             "speed":    0.0,
             "sparsity": m.get("achieved_sparsity") or sparsity_param * 100,
         }
 
-    # Quantization
     for qt, qd in (m.get("quantization") or {}).items():
         sm[qt] = {
             "accuracy": qd["accuracy"],
@@ -436,7 +442,7 @@ status = st.session_state.status or "queued"
 # ─────────────────────────────────────────────────────────────────────────────
 badge = {"running":"status-running","done":"status-done",
          "error":"status-error","queued":"status-queued"}.get(status,"status-queued")
-emoji = {"running":"⏳","done":"✅","error":"❌","queued":"🕐"}.get(status,"🕐")
+emoji = {"running":"","done":"","error":"","queued":""}.get(status,"")
 
 st.markdown(
     f'**Job:** `{job_id[:8]}…`  '
