@@ -17,13 +17,14 @@ import requests
 import seaborn as sns
 import streamlit as st
 
-# ─────────────────────────────────────────────────────────────────────────────
-API_URL       = "http://localhost:8000"
+# 
+# API_URL       = "https://kv06-tgf-nas.hf.space"
+API_URL = "http://localhost:8000"
 POLL_INTERVAL = 2
 
 st.set_page_config(
     page_title="HAR Pipeline — TGF-NAS + LAHUP + Quantization",
-    page_icon="🧠",
+    page_icon="",
     layout="wide",
 )
 
@@ -34,6 +35,7 @@ st.markdown("""
     background:linear-gradient(135deg,#1e3a5f,#16213e);
     border-radius:12px; padding:18px 22px; color:#fff;
     text-align:center; border:1px solid #2a5298; margin-bottom:8px;
+    min-height:100px; display:flex; flex-direction:column; justify-content:center;
 }
 .metric-label { font-size:12px; color:#a0b4cc; margin-bottom:4px; }
 .metric-value { font-size:28px; font-weight:700; color:#4fc3f7; }
@@ -85,18 +87,36 @@ def mcard(label, value, sub=""):
 
 def colorize(line):
     esc = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    if any(k in line for k in ["✅", "Best Architecture", "Final Test Accuracy"]):
+    # Best result lines — bright cyan bold
+    if any(k in line for k in ["Best Architecture Index", "Final Test Accuracy", "TGF-NAS Score:"]):
         return f'<span style="color:#4fc3f7;font-weight:600">{esc}</span>'
-    if any(k in line for k in ["💾", "Saved", "Accuracy after fine"]):
+    # Success / saved lines — green
+    if any(k in line for k in ["Model saved", "Saved", "Accuracy after fine-tuning",
+                                "[run_pipeline] Saved", "model_full_trained", "model_pruned",
+                                "model_quant", "Arch Table"]):
         return f'<span style="color:#4caf50">{esc}</span>'
+    # Errors — red
     if any(k in line for k in ["ERROR", "Error", "failed", "Traceback"]):
         return f'<span style="color:#f44336">{esc}</span>'
-    if any(k in line for k in ["WARNING", "[WARNING]", "Pruned (before FT)"]):
+    # Warnings / accuracy drops — yellow
+    if any(k in line for k in ["WARNING", "[WARNING]", "Pruned (before FT)",
+                                "Accuracy after pruning", "drop:"]):
         return f'<span style="color:#ffc107">{esc}</span>'
-    if any(k in line for k in ["===", "---", "APPLY", "PRUNING", "QUANT", "TGF-NAS", "run_pipeline"]):
+    # Section headers / pipeline stages — purple
+    if any(k in line for k in ["===", "---", "APPLY", "PRUNING SUMMARY", "QUANTIZATION SUMMARY",
+                                "QUANT", "TGF-NAS", "run_pipeline", "LAHUP"]):
         return f'<span style="color:#9575cd">{esc}</span>'
+    # Epoch lines — teal
     if re.match(r"\s*Epoch\s+\d+", line):
         return f'<span style="color:#80cbc4">{esc}</span>'
+    # Probe / scoring lines — soft orange
+    if any(k in line for k in ["Proxy Accuracy", "Architecture Magnitude", "Architecture Consistency",
+                                "Training Time", "Trainable Parameters", "Evaluating Model"]):
+        return f'<span style="color:#ffb74d">{esc}</span>'
+    # Baseline / summary stats — light grey-blue
+    if any(k in line for k in ["Baseline accuracy", "Achieved sparsity", "Model Size",
+                                "Size Reduction", "Auto-detected"]):
+        return f'<span style="color:#b0bec5">{esc}</span>'
     return esc
 
 
@@ -275,43 +295,44 @@ def make_heatmap_from_parsed(m: dict, sparsity_param: float) -> bytes | None:
 # Sidebar
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("⚙️ Pipeline Parameters")
+    st.header(" Pipeline Parameters")
 
-    st.subheader("📂 Data")
+    st.subheader(" Data")
     train_file = st.file_uploader("Training CSV",  type=["csv"])
     test_file  = st.file_uploader("Test CSV",      type=["csv"])
 
-    st.subheader("📊 Dataset fraction")
-    dataset_fraction = st.slider(
+    st.subheader("Dataset fraction")
+    dataset_fraction_pct = st.slider(
         "Fraction of dataset to use",
-        min_value=0.05, max_value=1.0, value=1.0, step=0.05,
-        help="0.5 = use 50% of rows from each CSV.  Speeds up experimentation.",
+        min_value=5, max_value=100, value=100, step=5,
+        format="%d%%",
+        help="50% = use 50% of rows from each CSV.  Speeds up experimentation.",
     )
-    used_pct = f"{dataset_fraction*100:.0f}%"
-    st.caption(f"Using **{used_pct}** of train & test data")
+    dataset_fraction = dataset_fraction_pct / 100
+    st.caption(f"Using **{dataset_fraction_pct}%** of train & test data")
 
-    st.subheader("🔍 NAS")
+    st.subheader(" NAS")
     num_architectures = st.slider("Architectures to sample", 5, 100, 20, 5)
 
-    st.subheader("✂️ Pruning")
-    sparsity = st.slider("Target Sparsity", 0.1, 0.9, 0.3, 0.05)
+    st.subheader(" Pruning")
+    sparsity_pct = st.slider("Target Sparsity", 10, 90, 30, 5, format="%d%%")
+    sparsity = sparsity_pct / 100
 
-    st.subheader("⚡ Quantization")
+    st.subheader(" Quantization")
     use_fp16 = st.checkbox("FP16", value=True)
     use_int8 = st.checkbox("INT8", value=True)
     quant_list = [q for q, on in [("FP16", use_fp16), ("INT8", use_int8)] if on]
 
-    st.subheader("🌐 API")
-    api_url = st.text_input("API URL", value=API_URL)
+    api_url = API_URL
 
     st.markdown("---")
     run_btn = st.button(
-        "🚀 Run Pipeline", type="primary",
+        " Run Pipeline", type="primary",
         disabled=st.session_state.running,
         use_container_width=True,
     )
     if st.session_state.job_id:
-        if st.button("🔴 Reset", use_container_width=True):
+        if st.button(" Reset", use_container_width=True):
             for k, v in DEFAULTS.items():
                 st.session_state[k] = v if not isinstance(v, list) else []
             st.rerun()
@@ -364,7 +385,7 @@ if run_btn:
 if not st.session_state.job_id:
     st.markdown("""
     <div style="text-align:center;padding:80px 20px;color:#6b7a99">
-        <div style="font-size:64px;margin-bottom:16px">🧠</div>
+        <div style="font-size:64px;margin-bottom:16px"></div>
         <h2 style="color:#a0b4cc">HAR Pipeline: TGF-NAS + LAHUP + Quantization</h2>
         <p style="max-width:520px;margin:auto">
             Upload your train and test CSVs in the sidebar, configure the parameters,
@@ -440,7 +461,7 @@ with col_left:
 
     # ── NAS results ──────────────────────────────────────────────────────────
     if m.get("final_accuracy") is not None or m.get("best_arch_idx") is not None:
-        st.markdown('<div class="section-header">🔍 NAS Results</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header"> NAS Results</div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
             v = f"{m['final_accuracy']:.2f}%" if m.get("final_accuracy") else "…"
@@ -456,45 +477,20 @@ with col_left:
             v = f"{m['tgfnas_score']:.4f}" if m.get("tgfnas_score") is not None else "…"
             st.markdown(mcard("TGF-NAS Score", v), unsafe_allow_html=True)
 
-    # # ── Training curve ────────────────────────────────────────────────────────
+    # #  Training curve 
     # if m.get("epoch_history"):
-    #     st.markdown('<div class="section-header">📈 Training Progress</div>', unsafe_allow_html=True)
+    #     st.markdown('<div class="section-header"> Training Progress</div>', unsafe_allow_html=True)
     #     df_ep = (pd.DataFrame(m["epoch_history"])
     #                .set_index("epoch")[["train_acc", "test_acc"]])
     #     df_ep.columns = ["Train %", "Test %"]
     #     st.line_chart(df_ep)
 
-    #remove
 
-    #remove
-    if st.session_state.result is not None:  #remove
-        arch_table = st.session_state.result.get("architecture_table", [])  #remove
-        if arch_table:  #remove
-            st.markdown('<div class="section-header">📊 Architecture Comparison (Full Training)</div>', unsafe_allow_html=True)  #remove
-            _df = pd.DataFrame(arch_table)  #remove
-            _col_rename = {  #remove
-                "arch_index":    "Arch #",  #remove
-                "tgfnas_score":  "TGF-NAS Score",  #remove
-                "full_accuracy": "Accuracy (%)",  #remove
-                "model_size_mb": "Size (MB)",  #remove
-                "inf_speed_ms":  "Speed (ms)",  #remove
-                "num_params":    "Params",  #remove
-            }  #remove
-            _df_show = _df[[col for col in _col_rename if col in _df.columns]].rename(columns=_col_rename)  #remove
-            _df_show = _df_show.sort_values("TGF-NAS Score", ascending=False).reset_index(drop=True)  #remove
-            _best_idx = st.session_state.result.get("best_architecture_index")  #remove
-            _arch_nums = _df_show["Arch #"].tolist()  #remove
-            def _highlight_best(row):  #remove
-                if _arch_nums[row.name] == _best_idx:  #remove
-                    return ["background-color:#1a3a5f; color:#4fc3f7; font-weight:bold;"] * len(row)  #remove
-                return [""] * len(row)  #remove
-            st.dataframe(_df_show.style.apply(_highlight_best, axis=1), use_container_width=True, hide_index=True)  #remove
-            st.caption("🔵 Highlighted row = architecture selected by TGF-NAS")  #remove
-    #yep
+   
 
-    # ── Pruning ───────────────────────────────────────────────────────────────
+    #  Pruning 
     if m.get("baseline_accuracy") is not None:
-        st.markdown('<div class="section-header">✂️ Pruning</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header"> Pruning</div>', unsafe_allow_html=True)
         base = m.get("baseline_accuracy", 0)
         ft   = m.get("finetuned_accuracy") or m.get("pruned_accuracy") or 0
         sb   = m.get("size_before") or 0
@@ -515,7 +511,7 @@ with col_left:
 
     # ── Quantization table ────────────────────────────────────────────────────
     if m.get("quantization"):
-        st.markdown('<div class="section-header">⚡ Quantization</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header"> Quantization</div>', unsafe_allow_html=True)
         rows = [
             {"Method": qt, "Size (MB)": f"{qd['size']:.3f}",
              "Accuracy %": f"{qd['accuracy']:.2f}", "Speed (ms)": f"{qd['speed']:.2f}"}
@@ -526,13 +522,13 @@ with col_left:
 
     # ── Model downloads ───────────────────────────────────────────────────────
     if status == "done" and st.session_state.model_paths:
-        st.markdown('<div class="section-header">💾 Download Models</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header"> Download Models</div>', unsafe_allow_html=True)
 
         LABEL_MAP = {
-            "full_trained": ("🧠 Full Trained Model",  "TGF-NAS + full training"),
-            "pruned":       ("✂️ Pruned Model",         "LAHUP pruning + fine-tune"),
-            "quant_fp16":   ("⚡ Quantized — FP16",    "Float-16 weights"),
-            "quant_int8":   ("⚡ Quantized — INT8",    "Int-8 weights"),
+            "full_trained": (" Full Trained Model",  "TGF-NAS + full training"),
+            "pruned":       (" Pruned Model",         "LAHUP pruning + fine-tune"),
+            "quant_fp16":   (" Quantized — FP16",    "Float-16 weights"),
+            "quant_int8":   (" Quantized — INT8",    "Int-8 weights"),
         }
 
         for key in st.session_state.model_paths:
@@ -561,7 +557,7 @@ with col_left:
 # RIGHT COLUMN — live log
 # ══════════════════════════════════════════════════════════════════════════════
 with col_right:
-    st.markdown('<div class="section-header">📜 Live Pipeline Log</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"> Live Pipeline Log</div>', unsafe_allow_html=True)
 
     logs     = st.session_state.all_logs
     log_html = (
@@ -573,7 +569,7 @@ with col_right:
 
     if logs:
         st.download_button(
-            "⬇️ Download Full Log (.txt)",
+            " Download Full Log (.txt)",
             data="\n".join(logs),
             file_name="har_pipeline_log.txt",
             mime="text/plain",
@@ -583,11 +579,11 @@ with col_right:
      # ── Heatmap ───────────────────────────────────────────────────────────────
     heatmap_png = make_heatmap_from_parsed(m, sparsity)
     if heatmap_png:
-        st.markdown('<div class="section-header">🌡️ Stage Comparison Heatmap</div>',
+        st.markdown('<div class="section-header"> Stage Comparison Heatmap</div>',
                     unsafe_allow_html=True)
         st.image(heatmap_png, use_container_width=True)
         st.download_button(
-            label="⬇️ Download Heatmap (PNG, 300 dpi)",
+            label=" Download Heatmap (.PNG)",
             data=heatmap_png,
             file_name="HAR_LAHUP_HEATMAP.png",
             mime="image/png",

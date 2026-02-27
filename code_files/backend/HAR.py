@@ -720,9 +720,9 @@ def full_training(model, train_csv, test_csv, sequence_length=1, num_epochs=30):
         test_acc = 100 * test_correct / test_total
         print(f"Epoch {epoch:2d}/{num_epochs} | Train Acc: {train_acc:.2f}% | Test Acc: {test_acc:.2f}%")
 
-    print(f"\n✅ Final Test Accuracy: {test_acc:.2f}%")
+    print(f"\nFinal Test Accuracy: {test_acc:.2f}%")
     torch.save(model.state_dict(), "best_lstm.pth")
-    print("💾 Model saved as 'best_lstm.pth'")
+    print("Model saved as 'best_lstm.pth'")
     return model, test_acc
 
 
@@ -955,7 +955,7 @@ def TGF_NAS(
     ranked_indices = filtered_indices[sorted_idx]
     best_idx = int(ranked_indices[0])
 
-    print(f"\n✅ Best Architecture Index: {best_idx}")
+    print(f"\nBest Architecture Index: {best_idx}")
     print(f"   TGF-NAS Score: {tgfnas_scores[best_idx]:.4f}")
     print(f"   Magnitude:     {magnitude_array[best_idx]:.6f}")
     print(f"   Consistency:   {consistency_array[best_idx]:.4f}")
@@ -969,33 +969,6 @@ def TGF_NAS(
         num_epochs=full_train_epochs,
     )
 
-    #remove
-    print("\n[Arch Table] Fully training all architectures for comparison table...") #remove
-    _arch_test_loader = _build_test_loader(test_path) #remove
-    architecture_table = [] #remove
-    for i in range(len(evaluation_history)): #remove
-        hist = evaluation_history[i] #remove
-        print(f"  [Arch Table] Training arch {i}/{len(evaluation_history)-1}...") #remove
-        _arch_model = copy.deepcopy(hist["model"]) #remove
-        _arch_model, _arch_acc = full_training( #remove
-            _arch_model, train_path, test_path, #remove
-            sequence_length=sequence_length, #remove
-            num_epochs=full_train_epochs, #remove
-        ) #remove
-        _arch_size  = model_size_mb(_arch_model) #remove
-        _arch_speed = _inference_speed(_arch_model, _arch_test_loader) #remove
-        architecture_table.append({ #remove
-            "arch_index":     i, #remove
-            "is_best":        (i == best_idx), #remove
-            "tgfnas_score":   round(float(tgfnas_scores[i]), 4), #remove
-            "full_accuracy":  round(_arch_acc, 2), #remove
-            "model_size_mb":  round(_arch_size, 3), #remove
-            "inf_speed_ms":   round(_arch_speed, 3), #remove
-            "num_params":     hist["num_params"], #remove
-        }) #remove
-        print(f"    Arch {i}: acc={_arch_acc:.2f}%  size={_arch_size:.3f}MB  speed={_arch_speed:.3f}ms {'← BEST (TGF-NAS selected)' if i == best_idx else ''}") #remove
-    #yep
-
     return {
         "accuracy": final_acc,
         "sparsity": sparsity,
@@ -1003,8 +976,7 @@ def TGF_NAS(
         "best_model": best_model,
         "evaluation_history": evaluation_history,
         "tgfnas_scores": tgfnas_scores,
-        "best_architecture_index": best_idx,
-        "architecture_table": architecture_table, #remove
+        "best_architecture_index": best_idx
     }
 
 
@@ -1807,7 +1779,6 @@ def run_pipeline(
             }
 
         return {
-            **result,  #remove
             "accuracy":     trained_acc,
             "sparsity":     sparsity,
             "quantization": quant_types,

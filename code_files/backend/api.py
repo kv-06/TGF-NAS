@@ -71,7 +71,6 @@ def run_pipeline_job(job_id, train_path, test_path, input_size, output_size,
             "quantization":            result.get("quantization"),
             "best_architecture_index": result.get("best_architecture_index"),
             "stage_metrics":           result.get("stage_metrics"),
-            "architecture_table":      result.get("architecture_table"),  #remove
         }
     except Exception:
         import traceback
