@@ -18,8 +18,8 @@ import seaborn as sns
 import streamlit as st
 
 # 
-# API_URL       = "https://kv06-tgf-nas.hf.space"
-API_URL = "http://localhost:8000"
+API_URL       = "https://kv06-tgf-nas.hf.space"
+# API_URL = "http://localhost:8000"
 POLL_INTERVAL = 2
 
 st.set_page_config(
